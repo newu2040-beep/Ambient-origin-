@@ -16,18 +16,8 @@ class MainViewModel(
     private val playbackManager: PlaybackManager
 ) : ViewModel() {
 
-    // Slider ranges are 0f..1f
-    private val _rainVol = MutableStateFlow(0f)
-    val rainVol: StateFlow<Float> = _rainVol
-    
-    private val _windVol = MutableStateFlow(0f)
-    val windVol: StateFlow<Float> = _windVol
-    
-    private val _brownNoiseVol = MutableStateFlow(0f)
-    val brownNoiseVol: StateFlow<Float> = _brownNoiseVol
-
-    private val _spaceVol = MutableStateFlow(0f)
-    val spaceVol: StateFlow<Float> = _spaceVol
+    private val _volumes = MutableStateFlow(SoundSynthesizer.SoundType.values().associateWith { 0f })
+    val volumes: StateFlow<Map<SoundSynthesizer.SoundType, Float>> = _volumes
 
     private val _customVol = MutableStateFlow(0f)
     val customVol: StateFlow<Float> = _customVol
@@ -44,12 +34,7 @@ class MainViewModel(
     )
 
     fun onVolumeChange(type: SoundSynthesizer.SoundType, value: Float) {
-        when(type) {
-            SoundSynthesizer.SoundType.RAIN -> _rainVol.value = value
-            SoundSynthesizer.SoundType.WIND -> _windVol.value = value
-            SoundSynthesizer.SoundType.BROWN_NOISE -> _brownNoiseVol.value = value
-            SoundSynthesizer.SoundType.SPACE -> _spaceVol.value = value
-        }
+        _volumes.value = _volumes.value.toMutableMap().apply { put(type, value) }
         playbackManager.setVolume(type, value)
     }
 
@@ -74,10 +59,15 @@ class MainViewModel(
         viewModelScope.launch {
             val mix = SavedMix(
                 name = name,
-                rainVolume = _rainVol.value,
-                windVolume = _windVol.value,
-                brownNoiseVolume = _brownNoiseVol.value,
-                spaceVolume = _spaceVol.value,
+                rainVolume = _volumes.value[SoundSynthesizer.SoundType.RAIN] ?: 0f,
+                windVolume = _volumes.value[SoundSynthesizer.SoundType.WIND] ?: 0f,
+                brownNoiseVolume = _volumes.value[SoundSynthesizer.SoundType.BROWN_NOISE] ?: 0f,
+                spaceVolume = _volumes.value[SoundSynthesizer.SoundType.SPACE] ?: 0f,
+                oceanVolume = _volumes.value[SoundSynthesizer.SoundType.OCEAN] ?: 0f,
+                birdsVolume = _volumes.value[SoundSynthesizer.SoundType.BIRDS] ?: 0f,
+                fireVolume = _volumes.value[SoundSynthesizer.SoundType.FIRE] ?: 0f,
+                thunderVolume = _volumes.value[SoundSynthesizer.SoundType.THUNDER] ?: 0f,
+                riverVolume = _volumes.value[SoundSynthesizer.SoundType.RIVER] ?: 0f,
                 customRecordingPath = _currentCustomAudio.value
             )
             repository.insert(mix)
@@ -89,6 +79,11 @@ class MainViewModel(
         onVolumeChange(SoundSynthesizer.SoundType.WIND, mix.windVolume)
         onVolumeChange(SoundSynthesizer.SoundType.BROWN_NOISE, mix.brownNoiseVolume)
         onVolumeChange(SoundSynthesizer.SoundType.SPACE, mix.spaceVolume)
+        onVolumeChange(SoundSynthesizer.SoundType.OCEAN, mix.oceanVolume)
+        onVolumeChange(SoundSynthesizer.SoundType.BIRDS, mix.birdsVolume)
+        onVolumeChange(SoundSynthesizer.SoundType.FIRE, mix.fireVolume)
+        onVolumeChange(SoundSynthesizer.SoundType.THUNDER, mix.thunderVolume)
+        onVolumeChange(SoundSynthesizer.SoundType.RIVER, mix.riverVolume)
         
         if (mix.customRecordingPath != null) {
             playCustomFile(mix.customRecordingPath)
@@ -108,10 +103,9 @@ class MainViewModel(
     }
     
     fun stopAll() {
-        onVolumeChange(SoundSynthesizer.SoundType.RAIN, 0f)
-        onVolumeChange(SoundSynthesizer.SoundType.WIND, 0f)
-        onVolumeChange(SoundSynthesizer.SoundType.BROWN_NOISE, 0f)
-        onVolumeChange(SoundSynthesizer.SoundType.SPACE, 0f)
+        SoundSynthesizer.SoundType.values().forEach {
+            onVolumeChange(it, 0f)
+        }
         removeCustomFile()
         playbackManager.stopAll()
     }

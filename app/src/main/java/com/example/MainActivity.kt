@@ -31,7 +31,7 @@ class MainActivity : ComponentActivity() {
         db = Room.databaseBuilder(
             applicationContext,
             AppDatabase::class.java, "ambient_db"
-        ).build()
+        ).fallbackToDestructiveMigration().build()
         repository = MixRepository(db.savedMixDao())
         playbackManager = PlaybackManager(applicationContext, lifecycleScope)
         

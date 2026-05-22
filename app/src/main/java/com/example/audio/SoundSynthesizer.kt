@@ -7,7 +7,7 @@ import kotlinx.coroutines.*
 import kotlin.random.Random
 
 class SoundSynthesizer(val type: SoundType) {
-    enum class SoundType { RAIN, WIND, BROWN_NOISE, SPACE }
+    enum class SoundType { RAIN, WIND, BROWN_NOISE, SPACE, OCEAN, BIRDS, FIRE, THUNDER, RIVER }
     
     private val sampleRate = 44100
     private var isPlaying = false
@@ -82,6 +82,51 @@ class SoundSynthesizer(val type: SoundType) {
                             val lfo = Math.sin(phase * 0.00001)
                             sample = Math.sin(phase * 2.0 * Math.PI * 100.0 / sampleRate) * 0.5 +
                                      Math.sin(phase * 2.0 * Math.PI * (103.0 + lfo) / sampleRate) * 0.5
+                            phase++
+                        }
+                        SoundType.OCEAN -> {
+                            val white = (Random.nextDouble() * 2 - 1.0)
+                            val lfo = Math.sin(phase * 0.00001)
+                            val filterCoeff = 0.01 + 0.015 * (lfo + 1.0) / 2.0
+                            sample = lastOut + filterCoeff * (white - lastOut)
+                            lastOut = sample
+                            sample *= 4.0
+                            phase++
+                        }
+                        SoundType.RIVER -> {
+                            val white = (Random.nextDouble() * 2 - 1.0)
+                            val filterCoeff = 0.05
+                            sample = lastOut + filterCoeff * (white - lastOut)
+                            lastOut = sample
+                            sample *= 3.0
+                        }
+                        SoundType.FIRE -> {
+                            val white = (Random.nextDouble() * 2 - 1.0)
+                            val crackle = if (Random.nextDouble() > 0.999) (Random.nextDouble() * 2 - 1.0) * 10 else 0.0
+                            sample = lastOut + 0.02 * (white - lastOut)
+                            lastOut = sample
+                            sample = (sample * 2.0) + crackle
+                        }
+                        SoundType.BIRDS -> {
+                            val lfo = Math.sin(phase * 0.000005)
+                            if (lfo > 0.9) {
+                                val chirpPhase = phase * (0.05 + 0.01 * Math.sin(phase * 0.001))
+                                sample = Math.sin(chirpPhase) * 0.5
+                            } else {
+                                sample = 0.0
+                            }
+                            phase++
+                        }
+                        SoundType.THUNDER -> {
+                            val lfo = Math.sin(phase * 0.000002)
+                            if (lfo > 0.99) {
+                                val white = (Random.nextDouble() * 2 - 1.0)
+                                sample = lastOut + 0.005 * (white - lastOut)
+                            } else {
+                                sample = lastOut * 0.9999
+                            }
+                            lastOut = sample
+                            sample *= 10.0
                             phase++
                         }
                     }

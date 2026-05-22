@@ -1,7 +1,11 @@
 package com.example.audio
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.media.MediaPlayer
+import android.os.Build
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -12,15 +16,20 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 class PlaybackManager(private val context: Context, private val scope: CoroutineScope) {
-    val synthesizers = mapOf(
-        SoundSynthesizer.SoundType.RAIN to SoundSynthesizer(SoundSynthesizer.SoundType.RAIN),
-        SoundSynthesizer.SoundType.WIND to SoundSynthesizer(SoundSynthesizer.SoundType.WIND),
-        SoundSynthesizer.SoundType.BROWN_NOISE to SoundSynthesizer(SoundSynthesizer.SoundType.BROWN_NOISE),
-        SoundSynthesizer.SoundType.SPACE to SoundSynthesizer(SoundSynthesizer.SoundType.SPACE)
-    )
+    val synthesizers = SoundSynthesizer.SoundType.values().associateWith { SoundSynthesizer(it) }
 
     private var customMediaPlayer: MediaPlayer? = null
     private var isPlaying = false
+
+    private val activeVolumes = mutableMapOf<SoundSynthesizer.SoundType, Float>()
+
+    private val receiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context?, intent: Intent?) {
+            if (intent?.action == "com.example.ambient.STOP_ALL") {
+                stopAll()
+            }
+        }
+    }
 
     private val _timerRemainingMs = MutableStateFlow<Long?>(null)
     val timerRemainingMs: StateFlow<Long?> = _timerRemainingMs
@@ -29,12 +38,33 @@ class PlaybackManager(private val context: Context, private val scope: Coroutine
     private var fadeOutJob: Job? = null
 
     init {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, IntentFilter("com.example.ambient.STOP_ALL"), Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(receiver, IntentFilter("com.example.ambient.STOP_ALL"))
+        }
         // Start synthesizers with 0 volume
         synthesizers.values.forEach { it.start(scope) }
     }
 
+    private fun checkServiceState() {
+        val hasActive = activeVolumes.values.any { it > 0f } || customMediaPlayer?.isPlaying == true
+        val intent = Intent(context, AudioService::class.java)
+        if (hasActive) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        } else {
+            context.stopService(intent)
+        }
+    }
+
     fun setVolume(type: SoundSynthesizer.SoundType, volume: Float) {
+        activeVolumes[type] = volume
         synthesizers[type]?.setVolume(volume)
+        checkServiceState()
     }
 
     fun playCustomAudio(filePath: String?, volume: Float) {
@@ -55,6 +85,7 @@ class PlaybackManager(private val context: Context, private val scope: Coroutine
                 e.printStackTrace()
             }
         }
+        checkServiceState()
     }
 
     fun setTimer(minutes: Int, fadeOutMinutes: Int) {
@@ -96,14 +127,17 @@ class PlaybackManager(private val context: Context, private val scope: Coroutine
 
     fun stopAll() {
         synthesizers.values.forEach { it.setVolume(0f) }
+        activeVolumes.clear()
         customMediaPlayer?.stop()
         customMediaPlayer?.release()
         customMediaPlayer = null
         timerJob?.cancel()
         _timerRemainingMs.value = null
+        checkServiceState()
     }
 
     fun release() {
+        try { context.unregisterReceiver(receiver) } catch (e: Exception) {}
         synthesizers.values.forEach { it.stop() }
         customMediaPlayer?.release()
     }
