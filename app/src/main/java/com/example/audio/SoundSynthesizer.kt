@@ -7,10 +7,11 @@ import kotlinx.coroutines.*
 import kotlin.random.Random
 
 class SoundSynthesizer(val type: SoundType) {
-    enum class SoundType { RAIN, WIND, BROWN_NOISE, SPACE, OCEAN, BIRDS, FIRE, THUNDER, RIVER }
+    enum class SoundType { RAIN, WIND, BROWN_NOISE, SPACE, OCEAN, BIRDS, FIRE, THUNDER, RIVER, CRICKETS, FROGS, TRAIN, CITY, FAN }
     
     private val sampleRate = 44100
     private var isPlaying = false
+    private var isPlayingPaused = false
     private var targetVolume = 0f
     private var currentVolume = 0f
     private var masterVolume = 1f
@@ -25,15 +26,19 @@ class SoundSynthesizer(val type: SoundType) {
             AudioFormat.CHANNEL_OUT_MONO,
             AudioFormat.ENCODING_PCM_16BIT
         )
-        // Adjust for mono vs stereo? Mono is fine for these
-        audioTrack = AudioTrack(
-            AudioManager.STREAM_MUSIC,
-            sampleRate,
-            AudioFormat.CHANNEL_OUT_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            bufferSize,
-            AudioTrack.MODE_STREAM
-        )
+        audioTrack = android.media.AudioTrack.Builder()
+            .setAudioAttributes(android.media.AudioAttributes.Builder()
+                .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build())
+            .setAudioFormat(AudioFormat.Builder()
+                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                .setSampleRate(sampleRate)
+                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                .build())
+            .setBufferSizeInBytes(bufferSize)
+            .setTransferMode(AudioTrack.MODE_STREAM)
+            .build()
         audioTrack?.play()
         
         synthJob = scope.launch(Dispatchers.Default) {
@@ -42,7 +47,6 @@ class SoundSynthesizer(val type: SoundType) {
             var lastOut = 0.0
             
             while (isActive && isPlaying) {
-                // smooth volume transition
                 if (currentVolume < targetVolume) {
                     currentVolume += 0.01f
                     if (currentVolume > targetVolume) currentVolume = targetVolume
@@ -51,7 +55,7 @@ class SoundSynthesizer(val type: SoundType) {
                     if (currentVolume < targetVolume) currentVolume = targetVolume
                 }
                 
-                val effectiveVol = currentVolume * masterVolume
+                val effectiveVol = if (isPlayingPaused) 0f else currentVolume * masterVolume
 
                 for (i in buffer.indices) {
                     var sample = 0.0
@@ -64,7 +68,6 @@ class SoundSynthesizer(val type: SoundType) {
                         }
                         SoundType.RAIN -> {
                             val white = (Random.nextDouble() * 2 - 1.0)
-                            // A bit more high frequency than brown noise
                             sample = lastOut + 0.1 * (white - lastOut)
                             lastOut = sample
                             sample *= 2.0
@@ -129,6 +132,39 @@ class SoundSynthesizer(val type: SoundType) {
                             sample *= 10.0
                             phase++
                         }
+                        SoundType.CRICKETS -> {
+                            val env = if (Math.sin(phase * 0.0001) > 0.5) 1.0 else 0.0
+                            sample = Math.sin(phase * 0.2) * env * 0.5
+                            phase++
+                        }
+                        SoundType.FROGS -> {
+                            val env = if (Math.sin(phase * 0.00005) > 0.95) 1.0 else 0.0
+                            sample = (Random.nextDouble() * 2 - 1.0) * env * 0.3
+                            phase++
+                        }
+                        SoundType.TRAIN -> {
+                            val lfo = Math.sin(phase * 0.00002)
+                            val white = (Random.nextDouble() * 2 - 1.0)
+                            sample = lastOut + 0.05 * (white - lastOut) * (lfo + 1.0) / 2.0
+                            lastOut = sample
+                            sample *= 2.0
+                            phase++
+                        }
+                        SoundType.CITY -> {
+                            val white = (Random.nextDouble() * 2 - 1.0)
+                            sample = lastOut + 0.03 * (white - lastOut)
+                            lastOut = sample
+                            sample *= 1.5
+                            val beep = if (Random.nextDouble() > 0.99995) Math.sin(phase * 0.1) * 0.5 else 0.0
+                            sample += beep
+                            phase++
+                        }
+                        SoundType.FAN -> {
+                            val white = (Random.nextDouble() * 2 - 1.0)
+                            sample = lastOut + 0.08 * (white - lastOut)
+                            lastOut = sample
+                            sample *= 2.5
+                        }
                     }
                     
                     val finalSample = (sample * 32767 * effectiveVol).toInt()
@@ -145,6 +181,14 @@ class SoundSynthesizer(val type: SoundType) {
 
     fun setMasterVolume(vol: Float) {
         this.masterVolume = vol
+    }
+
+    fun pause() {
+        isPlayingPaused = true
+    }
+
+    fun resume() {
+        isPlayingPaused = false
     }
     
     fun stop() {

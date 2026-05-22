@@ -20,13 +20,16 @@ class PlaybackManager(private val context: Context, private val scope: Coroutine
 
     private var customMediaPlayer: MediaPlayer? = null
     private var isPlaying = false
+    private var isPlayingPaused = false
 
     private val activeVolumes = mutableMapOf<SoundSynthesizer.SoundType, Float>()
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context?, intent: Intent?) {
-            if (intent?.action == "com.example.ambient.STOP_ALL") {
-                stopAll()
+            when (intent?.action) {
+                "com.example.ambient.STOP_ALL" -> stopAll()
+                "com.example.ambient.PAUSE" -> pauseAll()
+                "com.example.ambient.RESUME" -> resumeAll()
             }
         }
     }
@@ -38,18 +41,38 @@ class PlaybackManager(private val context: Context, private val scope: Coroutine
     private var fadeOutJob: Job? = null
 
     init {
+        val filter = IntentFilter().apply {
+            addAction("com.example.ambient.STOP_ALL")
+            addAction("com.example.ambient.PAUSE")
+            addAction("com.example.ambient.RESUME")
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, IntentFilter("com.example.ambient.STOP_ALL"), Context.RECEIVER_NOT_EXPORTED)
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
-            context.registerReceiver(receiver, IntentFilter("com.example.ambient.STOP_ALL"))
+            context.registerReceiver(receiver, filter)
         }
         // Start synthesizers with 0 volume
         synthesizers.values.forEach { it.start(scope) }
     }
 
+    fun pauseAll() {
+        isPlayingPaused = true
+        synthesizers.values.forEach { it.pause() }
+        customMediaPlayer?.pause()
+        checkServiceState()
+    }
+
+    fun resumeAll() {
+        isPlayingPaused = false
+        synthesizers.values.forEach { it.resume() }
+        customMediaPlayer?.start()
+        checkServiceState()
+    }
+
     private fun checkServiceState() {
-        val hasActive = activeVolumes.values.any { it > 0f } || customMediaPlayer?.isPlaying == true
+        val hasActive = activeVolumes.values.any { it > 0f } || customMediaPlayer?.isPlaying == true || isPlayingPaused
         val intent = Intent(context, AudioService::class.java)
+        intent.putExtra("IS_PAUSED", isPlayingPaused)
         if (hasActive) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
@@ -133,6 +156,7 @@ class PlaybackManager(private val context: Context, private val scope: Coroutine
         customMediaPlayer = null
         timerJob?.cancel()
         _timerRemainingMs.value = null
+        isPlayingPaused = false
         checkServiceState()
     }
 

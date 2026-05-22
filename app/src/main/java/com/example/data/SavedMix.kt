@@ -16,6 +16,11 @@ data class SavedMix(
     val fireVolume: Float = 0f,
     val thunderVolume: Float = 0f,
     val riverVolume: Float = 0f,
+    val cricketsVolume: Float = 0f,
+    val frogsVolume: Float = 0f,
+    val trainVolume: Float = 0f,
+    val cityVolume: Float = 0f,
+    val fanVolume: Float = 0f,
     val customRecordingPath: String? = null,
     val timestamp: Long = System.currentTimeMillis()
 )

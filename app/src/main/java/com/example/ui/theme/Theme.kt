@@ -52,13 +52,33 @@ private val RiverScheme = darkColorScheme(
 @Composable
 fun MyApplicationTheme(content: @Composable () -> Unit) {
     val currentTheme by ThemeManager.currentTheme.collectAsStateWithLifecycle()
-    val colorScheme = when(currentTheme) {
+    val isLightMode by ThemeManager.isLightMode.collectAsStateWithLifecycle()
+    
+    val baseScheme = when(currentTheme) {
         ThemeManager.ThemeOption.MIDNIGHT -> MidnightScheme
         ThemeManager.ThemeOption.FOREST -> ForestScheme
         ThemeManager.ThemeOption.OCEAN -> OceanScheme
         ThemeManager.ThemeOption.SUNSET -> SunsetScheme
         ThemeManager.ThemeOption.CANYON -> CanyonScheme
         ThemeManager.ThemeOption.RIVER -> RiverScheme
+        ThemeManager.ThemeOption.DESERT -> darkColorScheme(primary = Color(0xFFE0A96D), background = Color(0xFF2C1E16), surface = Color(0xFF3E2C22))
+        ThemeManager.ThemeOption.MOUNTAIN -> darkColorScheme(primary = Color(0xFF90A4AE), background = Color(0xFF1C2321), surface = Color(0xFF263238))
+        ThemeManager.ThemeOption.COSMOS -> darkColorScheme(primary = Color(0xFFB39DDB), background = Color(0xFF0F0C29), surface = Color(0xFF1E1945))
+        ThemeManager.ThemeOption.AURORA -> darkColorScheme(primary = Color(0xFF69F0AE), background = Color(0xFF0D1B2A), surface = Color(0xFF1B263B))
+        ThemeManager.ThemeOption.VOLCANO -> darkColorScheme(primary = Color(0xFFFF5252), background = Color(0xFF210000), surface = Color(0xFF3E0000))
+    }
+    
+    val colorScheme = if (isLightMode) {
+        // Automatically invert baseline colors for light mode
+        baseScheme.copy(
+            background = Color.White,
+            surface = Color(0xFFF5F5F5),
+            onPrimary = Color.White,
+            onBackground = Color.Black,
+            onSurface = Color.Black
+        )
+    } else {
+        baseScheme
     }
     
     val view = LocalView.current
@@ -66,7 +86,7 @@ fun MyApplicationTheme(content: @Composable () -> Unit) {
         SideEffect {
             val window = (view.context as Activity).window
             window.statusBarColor = colorScheme.background.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = isLightMode
         }
     }
 

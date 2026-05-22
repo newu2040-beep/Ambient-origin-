@@ -9,8 +9,14 @@ object ThemeManager {
         OCEAN("Ocean Depths"),
         SUNSET("Sunset Glow"),
         CANYON("Deep Canyon"),
-        RIVER("River Pebbles")
+        RIVER("River Pebbles"),
+        DESERT("Desert Sands"),
+        MOUNTAIN("Mountain Peaks"),
+        COSMOS("Deep Cosmos"),
+        AURORA("Northern Aurora"),
+        VOLCANO("Red Volcano")
     }
     
     val currentTheme = MutableStateFlow(ThemeOption.MIDNIGHT)
+    val isLightMode = MutableStateFlow(false)
 }

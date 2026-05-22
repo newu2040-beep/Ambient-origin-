@@ -68,6 +68,11 @@ class MainViewModel(
                 fireVolume = _volumes.value[SoundSynthesizer.SoundType.FIRE] ?: 0f,
                 thunderVolume = _volumes.value[SoundSynthesizer.SoundType.THUNDER] ?: 0f,
                 riverVolume = _volumes.value[SoundSynthesizer.SoundType.RIVER] ?: 0f,
+                cricketsVolume = _volumes.value[SoundSynthesizer.SoundType.CRICKETS] ?: 0f,
+                frogsVolume = _volumes.value[SoundSynthesizer.SoundType.FROGS] ?: 0f,
+                trainVolume = _volumes.value[SoundSynthesizer.SoundType.TRAIN] ?: 0f,
+                cityVolume = _volumes.value[SoundSynthesizer.SoundType.CITY] ?: 0f,
+                fanVolume = _volumes.value[SoundSynthesizer.SoundType.FAN] ?: 0f,
                 customRecordingPath = _currentCustomAudio.value
             )
             repository.insert(mix)
@@ -84,6 +89,11 @@ class MainViewModel(
         onVolumeChange(SoundSynthesizer.SoundType.FIRE, mix.fireVolume)
         onVolumeChange(SoundSynthesizer.SoundType.THUNDER, mix.thunderVolume)
         onVolumeChange(SoundSynthesizer.SoundType.RIVER, mix.riverVolume)
+        onVolumeChange(SoundSynthesizer.SoundType.CRICKETS, mix.cricketsVolume)
+        onVolumeChange(SoundSynthesizer.SoundType.FROGS, mix.frogsVolume)
+        onVolumeChange(SoundSynthesizer.SoundType.TRAIN, mix.trainVolume)
+        onVolumeChange(SoundSynthesizer.SoundType.CITY, mix.cityVolume)
+        onVolumeChange(SoundSynthesizer.SoundType.FAN, mix.fanVolume)
         
         if (mix.customRecordingPath != null) {
             playCustomFile(mix.customRecordingPath)
