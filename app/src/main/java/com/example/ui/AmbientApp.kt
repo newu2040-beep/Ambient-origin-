@@ -288,7 +288,7 @@ fun MixerScreen(viewModel: MainViewModel) {
                             onCheckedChange = { ThemeManager.isLightMode.value = it }
                         )
                     }
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     Text("Select Theme", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
                     LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
                         items(ThemeManager.ThemeOption.values()) { option ->
@@ -313,8 +313,11 @@ fun MixerScreen(viewModel: MainViewModel) {
     }
 }
 
+enum class WaveStyle { SINE, BARS, CIRCLES, TRIANGLES, PULSE }
+
 @Composable
 fun WaveIndicator(volumes: Map<SoundSynthesizer.SoundType, Float>, modifier: Modifier = Modifier) {
+    var waveStyle by remember { mutableStateOf(WaveStyle.SINE) }
     val totalVol = volumes.values.sum()
     val infiniteTransition = rememberInfiniteTransition()
     val phase by infiniteTransition.animateFloat(
@@ -328,27 +331,78 @@ fun WaveIndicator(volumes: Map<SoundSynthesizer.SoundType, Float>, modifier: Mod
     
     val primaryColor = MaterialTheme.colorScheme.primary
     
-    Canvas(modifier = modifier) {
-        val path = Path()
+    Canvas(modifier = modifier.clickable {
+        val nextOrdinal = (waveStyle.ordinal + 1) % WaveStyle.values().size
+        waveStyle = WaveStyle.values()[nextOrdinal]
+    }) {
         val width = size.width
         val height = size.height
         val midY = height / 2f
-        
         val amplitude = (totalVol).coerceIn(0f, 3f) * (height / 2.5f)
-        
-        path.moveTo(0f, midY)
-        for (i in 0 until width.toInt() step 5) {
-            val x = i.toFloat()
-            val normalizedX = x / width
-            val y = midY + kotlin.math.sin(normalizedX * 4f * Math.PI + phase).toFloat() * amplitude
-            path.lineTo(x, y)
+
+        when(waveStyle) {
+            WaveStyle.SINE -> {
+                val path = Path()
+                path.moveTo(0f, midY)
+                for (i in 0 until width.toInt() step 5) {
+                    val x = i.toFloat()
+                    val normalizedX = x / width
+                    val y = midY + kotlin.math.sin(normalizedX * 4f * Math.PI + phase).toFloat() * amplitude
+                    path.lineTo(x, y)
+                }
+                drawPath(path, color = primaryColor, style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round))
+            }
+            WaveStyle.BARS -> {
+                val barWidth = 10.dp.toPx()
+                val gap = 5.dp.toPx()
+                var x = 0f
+                while (x < width) {
+                    val normalizedX = x / width
+                    val h = midY + kotlin.math.sin(normalizedX * 6f * Math.PI + phase * 2f).toFloat() * amplitude
+                    val barHeight = kotlin.math.abs(h - midY) * 2f + 4.dp.toPx()
+                    drawRect(
+                        color = primaryColor,
+                        topLeft = androidx.compose.ui.geometry.Offset(x, midY - barHeight / 2f),
+                        size = androidx.compose.ui.geometry.Size(barWidth, barHeight),
+                        alpha = 0.8f
+                    )
+                    x += barWidth + gap
+                }
+            }
+            WaveStyle.CIRCLES -> {
+                val count = 10
+                for (i in 0 until count) {
+                    val normalized = i.toFloat() / count
+                    val x = width * normalized
+                    val yOffset = kotlin.math.sin(normalized * 4f * Math.PI + phase).toFloat() * amplitude
+                    drawCircle(
+                        color = primaryColor,
+                        radius = (amplitude / 3f).coerceAtLeast(4.dp.toPx()),
+                        center = androidx.compose.ui.geometry.Offset(x, midY + yOffset),
+                        alpha = 0.6f
+                    )
+                }
+            }
+            WaveStyle.TRIANGLES -> {
+                val path = Path()
+                val step = width / 15f
+                path.moveTo(0f, midY)
+                for (i in 0..15) {
+                    val x = i * step
+                    val y = if (i % 2 == 0) midY + amplitude else midY - amplitude
+                    val animatedY = y + kotlin.math.sin(phase + i).toFloat() * (amplitude / 2f)
+                    path.lineTo(x, animatedY)
+                }
+                drawPath(path, color = primaryColor, style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round))
+            }
+            WaveStyle.PULSE -> {
+                val radius1 = (kotlin.math.sin(phase).toFloat() * 0.5f + 0.5f) * amplitude * 2f
+                val radius2 = (kotlin.math.sin(phase + Math.PI).toFloat() * 0.5f + 0.5f) * amplitude * 2f
+                drawCircle(primaryColor, radius = radius1.coerceAtLeast(10f), alpha = 0.4f, center = androidx.compose.ui.geometry.Offset(width/2, midY))
+                drawCircle(primaryColor, radius = radius2.coerceAtLeast(10f), alpha = 0.4f, center = androidx.compose.ui.geometry.Offset(width/2, midY))
+                drawCircle(primaryColor, radius = (amplitude / 2f).coerceAtLeast(10f), center = androidx.compose.ui.geometry.Offset(width/2, midY))
+            }
         }
-        
-        drawPath(
-            path = path,
-            color = primaryColor,
-            style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
-        )
     }
 }
 
@@ -409,87 +463,8 @@ fun LibraryScreen(viewModel: MainViewModel) {
                             Spacer(modifier = Modifier.width(16.dp))
                             Text(mix.name, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
                             IconButton(onClick = { 
-                                val resolver = context.contentResolver
-                                val contentValues = ContentValues().apply {
-                                    put(MediaStore.MediaColumns.DISPLAY_NAME, "${mix.name.replace(" ", "_")}_AmbientMix.wav")
-                                    put(MediaStore.MediaColumns.MIME_TYPE, "audio/wav")
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                        put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
-                                    }
-                                }
-                                val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                    resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
-                                } else {
-                                    val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                                    dir.mkdirs()
-                                    val file = File(dir, "${mix.name.replace(" ", "_")}_AmbientMix.wav")
-                                    android.net.Uri.fromFile(file)
-                                }
-                                if (uri != null) {
-                                    try {
-                                        val outputStream = if (uri.scheme == "file") {
-                                            java.io.FileOutputStream(File(uri.path!!))
-                                        } else {
-                                            resolver.openOutputStream(uri)
-                                        }
-                                        outputStream?.use { out ->
-                                            val sampleRate = 44100
-                                            val durationInSeconds = 10
-                                            val totalSamples = sampleRate * durationInSeconds
-                                            val channels = 1
-                                            val bitsPerSample = 16
-                                            
-                                            val byteRate = sampleRate * channels * bitsPerSample / 8
-                                            val totalDataLen = totalSamples * channels * bitsPerSample / 8
-                                            val totalAudioLen = totalDataLen + 36
-                                            
-                                            val header = ByteArray(44)
-                                            header[0] = 'R'.code.toByte(); header[1] = 'I'.code.toByte(); header[2] = 'F'.code.toByte(); header[3] = 'F'.code.toByte()
-                                            header[4] = (totalAudioLen and 0xff).toByte()
-                                            header[5] = ((totalAudioLen shr 8) and 0xff).toByte()
-                                            header[6] = ((totalAudioLen shr 16) and 0xff).toByte()
-                                            header[7] = ((totalAudioLen shr 24) and 0xff).toByte()
-                                            header[8] = 'W'.code.toByte(); header[9] = 'A'.code.toByte(); header[10] = 'V'.code.toByte(); header[11] = 'E'.code.toByte()
-                                            header[12] = 'f'.code.toByte(); header[13] = 'm'.code.toByte(); header[14] = 't'.code.toByte(); header[15] = ' '.code.toByte()
-                                            header[16] = 16; header[17] = 0; header[18] = 0; header[19] = 0
-                                            header[20] = 1; header[21] = 0
-                                            header[22] = channels.toByte(); header[23] = 0
-                                            header[24] = (sampleRate and 0xff).toByte()
-                                            header[25] = ((sampleRate shr 8) and 0xff).toByte()
-                                            header[26] = ((sampleRate shr 16) and 0xff).toByte()
-                                            header[27] = ((sampleRate shr 24) and 0xff).toByte()
-                                            header[28] = (byteRate and 0xff).toByte()
-                                            header[29] = ((byteRate shr 8) and 0xff).toByte()
-                                            header[30] = ((byteRate shr 16) and 0xff).toByte()
-                                            header[31] = ((byteRate shr 24) and 0xff).toByte()
-                                            header[32] = (channels * bitsPerSample / 8).toByte(); header[33] = 0
-                                            header[34] = bitsPerSample.toByte(); header[35] = 0
-                                            header[36] = 'd'.code.toByte(); header[37] = 'a'.code.toByte(); header[38] = 't'.code.toByte(); header[39] = 'a'.code.toByte()
-                                            header[40] = (totalDataLen and 0xff).toByte()
-                                            header[41] = ((totalDataLen shr 8) and 0xff).toByte()
-                                            header[42] = ((totalDataLen shr 16) and 0xff).toByte()
-                                            header[43] = ((totalDataLen shr 24) and 0xff).toByte()
-                                            
-                                            out.write(header)
-                                            
-                                            // Real generator dummy loop to create 10 sec sample
-                                            val buffer = ByteArray(4096)
-                                            var bytesWritten = 0
-                                            while (bytesWritten < totalDataLen) {
-                                                for(i in buffer.indices) {
-                                                    buffer[i] = (kotlin.math.sin(bytesWritten * 0.05) * 100).toInt().toByte()
-                                                }
-                                                out.write(buffer)
-                                                bytesWritten += buffer.size
-                                            }
-                                        }
-                                        Toast.makeText(context, "High-Quality WAV Exported to Downloads!", Toast.LENGTH_SHORT).show()
-                                    } catch (e: Exception) {
-                                        Toast.makeText(context, "Encoding failed", Toast.LENGTH_SHORT).show()
-                                    }
-                                } else {
-                                    Toast.makeText(context, "Failed to export", Toast.LENGTH_SHORT).show()
-                                }
+                                viewModel.exportMix(context, mix)
+                                Toast.makeText(context, "Export started! Check notifications.", Toast.LENGTH_SHORT).show()
                             }) {
                                 Icon(Icons.Default.Download, contentDescription = "Download", tint = MaterialTheme.colorScheme.tertiary)
                             }
@@ -578,6 +553,9 @@ fun RecordScreen(viewModel: MainViewModel, dir: File) {
 
 @Composable
 fun TimerScreen(viewModel: MainViewModel) {
+    var showCustomTimer by remember { mutableStateOf(false) }
+    var customMinutesStr by remember { mutableStateOf("") }
+    
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text(
             "Sleep Timer",
@@ -593,24 +571,41 @@ fun TimerScreen(viewModel: MainViewModel) {
             modifier = Modifier.padding(bottom = 24.dp)
         )
 
-        val options = listOf(15, 30, 45, 60, 90)
-        options.forEach { minutes ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
-                    .clickable { viewModel.setTimer(minutes, 5) }, // 5 min fadeout
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Timer, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Text("$minutes Minutes", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            val options = listOf(15, 30, 45, 60, 90)
+            items(options) { minutes ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                        .clickable { viewModel.setTimer(minutes, 5) },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Timer, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text("$minutes Minutes", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+            }
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                        .clickable { showCustomTimer = true },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text("Custom Timer", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
+                    }
                 }
             }
         }
         
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(16.dp))
         
         OutlinedButton(
             onClick = { viewModel.setTimer(0, 0) },
@@ -618,5 +613,33 @@ fun TimerScreen(viewModel: MainViewModel) {
         ) {
             Text("Cancel Timer")
         }
+    }
+    
+    if (showCustomTimer) {
+        AlertDialog(
+            onDismissRequest = { showCustomTimer = false },
+            title = { Text("Custom Timer") },
+            text = {
+                OutlinedTextField(
+                    value = customMinutesStr,
+                    onValueChange = { customMinutesStr = it },
+                    label = { Text("Minutes") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val mins = customMinutesStr.toIntOrNull()
+                    if (mins != null && mins > 0) {
+                        viewModel.setTimer(mins, 5) // default 5 min fadeout
+                        customMinutesStr = ""
+                        showCustomTimer = false
+                    }
+                }) { Text("Start") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCustomTimer = false }) { Text("Cancel") }
+            }
+        )
     }
 }

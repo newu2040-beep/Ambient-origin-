@@ -33,12 +33,21 @@ class AudioService : Service() {
         val stopPendingIntent = PendingIntent.getBroadcast(this, 1, stopIntent, PendingIntent.FLAG_IMMUTABLE)
 
         val isPaused = intent?.getBooleanExtra("IS_PAUSED", false) ?: false
+        val timerEndTime = intent?.getLongExtra("TIMER_END_TIME", -1L) ?: -1L
 
         val builder = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Ambient Origin Background Audio")
-            .setContentText(if (isPaused) "Paused" else "Playing nature sounds...")
+            .setContentText(if (isPaused) "Paused" else if (timerEndTime > 0) "Timer active" else "Playing nature sounds...")
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentIntent(pendingIntent)
+            
+        if (timerEndTime > 0 && !isPaused) {
+            builder.setUsesChronometer(true)
+            builder.setWhen(timerEndTime)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                builder.setChronometerCountDown(true)
+            }
+        }
             
         if (isPaused) {
             builder.addAction(android.R.drawable.ic_media_play, "Resume", resumePendingIntent)

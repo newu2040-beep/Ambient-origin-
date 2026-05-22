@@ -69,10 +69,13 @@ class PlaybackManager(private val context: Context, private val scope: Coroutine
         checkServiceState()
     }
 
+    private var timerEndTime: Long = -1L
+
     private fun checkServiceState() {
         val hasActive = activeVolumes.values.any { it > 0f } || customMediaPlayer?.isPlaying == true || isPlayingPaused
         val intent = Intent(context, AudioService::class.java)
         intent.putExtra("IS_PAUSED", isPlayingPaused)
+        intent.putExtra("TIMER_END_TIME", timerEndTime)
         if (hasActive) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
@@ -118,12 +121,16 @@ class PlaybackManager(private val context: Context, private val scope: Coroutine
 
         if (minutes <= 0) {
             _timerRemainingMs.value = null
+            timerEndTime = -1L
+            checkServiceState()
             return
         }
 
         val totalMs = minutes * 60 * 1000L
         val fadeMs = fadeOutMinutes * 60 * 1000L
         _timerRemainingMs.value = totalMs
+        timerEndTime = System.currentTimeMillis() + totalMs
+        checkServiceState()
 
         timerJob = scope.launch {
             var remaining = totalMs
@@ -139,6 +146,7 @@ class PlaybackManager(private val context: Context, private val scope: Coroutine
                 }
             }
             _timerRemainingMs.value = null
+            timerEndTime = -1L
             stopAll()
         }
     }
@@ -156,6 +164,7 @@ class PlaybackManager(private val context: Context, private val scope: Coroutine
         customMediaPlayer = null
         timerJob?.cancel()
         _timerRemainingMs.value = null
+        timerEndTime = -1L
         isPlayingPaused = false
         checkServiceState()
     }
