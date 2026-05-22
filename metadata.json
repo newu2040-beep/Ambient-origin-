@@ -1,0 +1,6 @@
+{
+  "name": "Ambient Origin",
+  "description": "Peaceful soundscape generator, sleep timer, and custom offline audio loops.",
+  "requestFramePermissions": ["MICROPHONE"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
